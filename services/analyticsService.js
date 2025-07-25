@@ -1,244 +1,190 @@
 // services/analyticsService.js
-const { User, Case, Progress, Analytics } = require('../models');
+const { User, Case, Progress, Review } = require('../models');
 const logger = require('../utils/logger');
 const { redisUtils } = require('../config/redis');
 
 const analyticsService = {
-  async calculateUserPerformance(userId, timeframe = '30d') {
+  async getUserAnalytics(userId) {
     try {
-      const cacheKey = `user_performance_${userId}_${timeframe}`;
-      const cached = await redisUtils.get(cacheKey);
-      if (cached) return cached;
-
-      // Calculate date range
-      const endDate = new Date();
-      const startDate = new Date();
-      switch (timeframe) {
-        case '7d':
-          startDate.setDate(endDate.getDate() - 7);
-          break;
-        case '30d':
-          startDate.setDate(endDate.getDate() - 30);
-          break;
-        case '90d':
-          startDate.setDate(endDate.getDate() - 90);
-          break;
-        default:
-          startDate.setDate(endDate.getDate() - 30);
-      }
-
       // Get user progress data
-      const progressData = await Progress.find({
-        userId,
-        status: 'completed',
-        createdAt: { $gte: startDate, $lte: endDate }
-      }).populate('caseId', 'specialty difficulty metadata.maxScore');
+      const progressData = await Progress.find({ userId, status: 'completed' })
+        .populate('caseId', 'title specialty difficulty')
+        .sort({ createdAt: -1 })
+        .lean();
 
-      if (progressData.length === 0) {
-        return {
-          totalCases: 0,
-          averageScore: 0,
-          totalTimeSpent: 0,
-          averageTimePerCase: 0,
-          specialtyBreakdown: {},
-          difficultyBreakdown: {},
-          performanceTrend: []
-        };
-      }
+      const user = await User.findById(userId).lean();
 
-      // Calculate metrics
-      const totalScore = progressData.reduce((sum, p) => sum + p.percentageScore, 0);
-      const totalTime = progressData.reduce((sum, p) => sum + p.timeSpent, 0);
-
-      const performance = {
-        totalCases: progressData.length,
-        averageScore: Math.round(totalScore / progressData.length),
-        totalTimeSpent: totalTime,
-        averageTimePerCase: Math.round(totalTime / progressData.length),
-        specialtyBreakdown: this.calculateSpecialtyBreakdown(progressData),
-        difficultyBreakdown: this.calculateDifficultyBreakdown(progressData),
-        performanceTrend: this.calculatePerformanceTrend(progressData)
+      // Calculate overview metrics
+      const overview = {
+        casesCompleted: progressData.length,
+        averageScore: progressData.length > 0 ? 
+          Math.round(progressData.reduce((sum, p) => sum + p.percentageScore, 0) / progressData.length) : 0,
+        totalTimeSpent: progressData.reduce((sum, p) => sum + (p.timeSpent || 0), 0),
+        currentStreak: user.statistics?.streakDays || 0
       };
 
-      // Cache for 1 hour
-      await redisUtils.set(cacheKey, performance, 3600);
-      return performance;
+      // Performance by specialty
+      const performanceBySpecialty = {};
+      progressData.forEach(progress => {
+        const specialty = progress.caseId?.specialty || 'Unknown';
+        if (!performanceBySpecialty[specialty]) {
+          performanceBySpecialty[specialty] = {
+            casesCompleted: 0,
+            totalScore: 0,
+            totalTime: 0
+          };
+        }
+        performanceBySpecialty[specialty].casesCompleted++;
+        performanceBySpecialty[specialty].totalScore += progress.percentageScore;
+        performanceBySpecialty[specialty].totalTime += progress.timeSpent || 0;
+      });
 
-    } catch (error) {
-      logger.error('Calculate user performance error:', error);
-      throw error;
-    }
-  },
+      // Calculate averages
+      Object.keys(performanceBySpecialty).forEach(specialty => {
+        const data = performanceBySpecialty[specialty];
+        data.averageScore = Math.round(data.totalScore / data.casesCompleted);
+        data.averageTime = Math.round(data.totalTime / data.casesCompleted);
+        delete data.totalScore;
+        delete data.totalTime;
+      });
 
-  calculateSpecialtyBreakdown(progressData) {
-    const breakdown = {};
-    
-    progressData.forEach(progress => {
-      const specialty = progress.caseId.specialty;
-      if (!breakdown[specialty]) {
-        breakdown[specialty] = {
-          casesCompleted: 0,
-          totalScore: 0,
-          totalTime: 0
-        };
-      }
-      
-      breakdown[specialty].casesCompleted += 1;
-      breakdown[specialty].totalScore += progress.percentageScore;
-      breakdown[specialty].totalTime += progress.timeSpent;
-    });
-
-    // Calculate averages
-    Object.keys(breakdown).forEach(specialty => {
-      const data = breakdown[specialty];
-      data.averageScore = Math.round(data.totalScore / data.casesCompleted);
-      data.averageTime = Math.round(data.totalTime / data.casesCompleted);
-    });
-
-    return breakdown;
-  },
-
-  calculateDifficultyBreakdown(progressData) {
-    const breakdown = {};
-    
-    progressData.forEach(progress => {
-      const difficulty = progress.caseId.difficulty;
-      if (!breakdown[difficulty]) {
-        breakdown[difficulty] = {
-          casesCompleted: 0,
-          totalScore: 0,
-          totalTime: 0
-        };
-      }
-      
-      breakdown[difficulty].casesCompleted += 1;
-      breakdown[difficulty].totalScore += progress.percentageScore;
-      breakdown[difficulty].totalTime += progress.timeSpent;
-    });
-
-    // Calculate averages
-    Object.keys(breakdown).forEach(difficulty => {
-      const data = breakdown[difficulty];
-      data.averageScore = Math.round(data.totalScore / data.casesCompleted);
-      data.averageTime = Math.round(data.totalTime / data.casesCompleted);
-    });
-
-    return breakdown;
-  },
-
-  calculatePerformanceTrend(progressData) {
-    // Sort by date
-    const sortedData = progressData.sort((a, b) => a.createdAt - b.createdAt);
-    
-    // Group by week
-    const weeklyData = {};
-    sortedData.forEach(progress => {
-      const weekStart = this.getWeekStart(progress.createdAt);
-      const weekKey = weekStart.toISOString().split('T')[0];
-      
-      if (!weeklyData[weekKey]) {
-        weeklyData[weekKey] = {
-          week: weekKey,
-          cases: 0,
-          totalScore: 0,
-          totalTime: 0
-        };
-      }
-      
-      weeklyData[weekKey].cases += 1;
-      weeklyData[weekKey].totalScore += progress.percentageScore;
-      weeklyData[weekKey].totalTime += progress.timeSpent;
-    });
-
-    // Calculate weekly averages
-    return Object.values(weeklyData).map(week => ({
-      week: week.week,
-      casesCompleted: week.cases,
-      averageScore: Math.round(week.totalScore / week.cases),
-      averageTime: Math.round(week.totalTime / week.cases)
-    }));
-  },
-
-  getWeekStart(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day;
-    return new Date(d.setDate(diff));
-  },
-
-  async calculateInstitutionMetrics(institution) {
-    try {
-      const users = await User.find({ 'profile.institution': institution });
-      const userIds = users.map(u => u._id);
-
-      const progressData = await Progress.find({
-        userId: { $in: userIds },
-        status: 'completed'
-      }).populate('caseId', 'specialty difficulty');
+      // Recent activity (last 10 completed cases)
+      const recentActivity = progressData.slice(0, 10).map(progress => ({
+        caseId: progress.caseId?._id,
+        caseTitle: progress.caseId?.title,
+        specialty: progress.caseId?.specialty,
+        difficulty: progress.caseId?.difficulty,
+        score: progress.percentageScore,
+        timeSpent: progress.timeSpent,
+        completedAt: progress.updatedAt
+      }));
 
       return {
-        totalUsers: users.length,
-        totalCasesCompleted: progressData.length,
-        averageScore: progressData.length > 0 
-          ? Math.round(progressData.reduce((sum, p) => sum + p.percentageScore, 0) / progressData.length)
-          : 0,
-        specialtyDistribution: this.calculateSpecialtyBreakdown(progressData),
-        userRoleDistribution: this.calculateRoleDistribution(users)
+        overview,
+        performanceBySpecialty,
+        recentActivity,
+        achievements: user.achievements || []
       };
 
     } catch (error) {
-      logger.error('Calculate institution metrics error:', error);
+      logger.error('Get user analytics error:', error);
       throw error;
     }
   },
 
-  calculateRoleDistribution(users) {
+  async getCaseAnalytics(caseId) {
+    try {
+      const progressData = await Progress.find({ caseId, status: 'completed' }).lean();
+      const reviews = await Review.find({ caseId }).lean();
+
+      const analytics = {
+        totalAttempts: progressData.length,
+        completionRate: progressData.length > 0 ? 100 : 0, // Simplified
+        averageScore: progressData.length > 0 ?
+          Math.round(progressData.reduce((sum, p) => sum + p.percentageScore, 0) / progressData.length) : 0,
+        averageTime: progressData.length > 0 ?
+          Math.round(progressData.reduce((sum, p) => sum + (p.timeSpent || 0), 0) / progressData.length) : 0,
+        averageRating: reviews.length > 0 ?
+          Math.round(reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length) : 0,
+        difficultyDistribution: this.calculateDifficultyDistribution(progressData)
+      };
+
+      return analytics;
+
+    } catch (error) {
+      logger.error('Get case analytics error:', error);
+      throw error;
+    }
+  },
+
+  calculateDifficultyDistribution(progressData) {
     const distribution = {};
-    users.forEach(user => {
-      distribution[user.role] = (distribution[user.role] || 0) + 1;
+    
+    progressData.forEach(progress => {
+      if (progress.stepPerformance) {
+        progress.stepPerformance.forEach(step => {
+          if (!distribution[step.stepId]) {
+            distribution[step.stepId] = {
+              attempts: 0,
+              correct: 0,
+              totalTime: 0
+            };
+          }
+          distribution[step.stepId].attempts++;
+          if (step.isCorrect) {
+            distribution[step.stepId].correct++;
+          }
+          distribution[step.stepId].totalTime += step.timeSpent || 0;
+        });
+      }
     });
+
+    // Calculate rates and averages
+    Object.keys(distribution).forEach(stepId => {
+      const data = distribution[stepId];
+      data.correctRate = data.attempts > 0 ? Math.round((data.correct / data.attempts) * 100) : 0;
+      data.averageTime = data.attempts > 0 ? Math.round(data.totalTime / data.attempts) : 0;
+      delete data.correct;
+      delete data.totalTime;
+    });
+
     return distribution;
   },
 
-  async generateSystemMetrics() {
+  async getSystemAnalytics() {
     try {
-      const [
-        totalUsers,
-        totalCases,
-        totalProgress,
-        completedProgress,
-        activeUsers
-      ] = await Promise.all([
+      const [totalUsers, totalCases, totalSessions] = await Promise.all([
         User.countDocuments(),
         Case.countDocuments({ 'metadata.status': 'published' }),
-        Progress.countDocuments(),
-        Progress.countDocuments({ status: 'completed' }),
-        User.countDocuments({ 
-          'statistics.lastActiveDate': { 
-            $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) 
-          } 
-        })
+        Progress.countDocuments()
+      ]);
+
+      const progressData = await Progress.find({ status: 'completed' })
+        .populate('caseId', 'specialty')
+        .lean();
+
+      const averageSessionTime = progressData.length > 0 ?
+        Math.round(progressData.reduce((sum, p) => sum + (p.timeSpent || 0), 0) / progressData.length) : 0;
+
+      // Popular specialties
+      const specialtyCount = {};
+      progressData.forEach(progress => {
+        const specialty = progress.caseId?.specialty || 'Unknown';
+        specialtyCount[specialty] = (specialtyCount[specialty] || 0) + 1;
+      });
+
+      const popularSpecialties = Object.entries(specialtyCount)
+        .map(([specialty, count]) => ({ specialty, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+
+      // User engagement (simplified)
+      const now = new Date();
+      const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      const [dailyActive, weeklyActive, monthlyActive] = await Promise.all([
+        User.countDocuments({ 'statistics.lastActiveDate': { $gte: dayAgo } }),
+        User.countDocuments({ 'statistics.lastActiveDate': { $gte: weekAgo } }),
+        User.countDocuments({ 'statistics.lastActiveDate': { $gte: monthAgo } })
       ]);
 
       return {
-        users: {
-          total: totalUsers,
-          active: activeUsers,
-          activityRate: totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0
-        },
-        cases: {
-          total: totalCases,
-          averageCompletionRate: totalProgress > 0 ? Math.round((completedProgress / totalProgress) * 100) : 0
-        },
-        engagement: {
-          totalSessions: totalProgress,
-          completedSessions: completedProgress,
-          completionRate: totalProgress > 0 ? Math.round((completedProgress / totalProgress) * 100) : 0
+        totalUsers,
+        totalCases,
+        totalSessions,
+        averageSessionTime,
+        popularSpecialties,
+        userEngagement: {
+          dailyActiveUsers: dailyActive,
+          weeklyActiveUsers: weeklyActive,
+          monthlyActiveUsers: monthlyActive
         }
       };
 
     } catch (error) {
-      logger.error('Generate system metrics error:', error);
+      logger.error('Get system analytics error:', error);
       throw error;
     }
   }

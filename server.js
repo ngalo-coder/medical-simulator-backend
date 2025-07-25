@@ -20,6 +20,7 @@ const corsMiddleware = require('./middleware/cors');
 const { httpLogger } = require('./middleware/logging');
 const { generalLimiter } = require('./middleware/rateLimit');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const { performanceMonitoring, requestTracking, errorTracking } = require('./middleware/monitoring');
 
 // Import routes
 const apiRoutes = require('./routes');
@@ -344,80 +345,63 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Trust proxy (important for Render.com)
 app.set('trust proxy', 1);
 
+// Request tracking and monitoring
+app.use(requestTracking);
+app.use(performanceMonitoring);
+
 // Request logging
 app.use(httpLogger);
 
 // Rate limiting
 app.use(generalLimiter);
 
-// ==================== HEALTH CHECK ENDPOINT ====================
+// ==================== HEALTH CHECK ENDPOINTS ====================
 
+const { healthChecker } = require('./utils/healthCheck');
+const { getPerformanceMetrics } = require('./middleware/monitoring');
+
+// Basic health check
 app.get('/health', async (req, res) => {
   try {
-    // Check database connection
-    const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+    const health = await healthChecker.runAllChecks();
+    const statusCode = health.status === 'healthy' ? 200 : 
+                      health.status === 'warning' ? 200 : 503;
     
-    // System metrics
-    const memoryUsage = process.memoryUsage();
-    const uptime = process.uptime();
-
-    // Check Redis connection
-    let redisStatus = 'not configured';
-    try {
-      const { getRedisClient } = require('./config/redis');
-      const redisClient = getRedisClient();
-      if (redisClient) {
-        await redisClient.ping();
-        redisStatus = 'connected';
-      }
-    } catch (redisError) {
-      redisStatus = 'disconnected';
-    }
-
-    const healthData = {
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      version: process.env.npm_package_version || '1.0.0',
-      environment: process.env.NODE_ENV || 'development',
-      uptime: Math.floor(uptime),
-      database: {
-        status: dbStatus,
-        name: 'MongoDB'
-      },
-      cache: {
-        status: redisStatus,
-        name: 'Redis'
-      },
-      memory: {
-        rss: Math.round(memoryUsage.rss / 1024 / 1024) + 'MB',
-        heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024) + 'MB',
-        heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024) + 'MB',
-        external: Math.round(memoryUsage.external / 1024 / 1024) + 'MB'
-      },
-      features: {
-        realTimeCollaboration: process.env.ENABLE_REAL_TIME_COLLABORATION === 'true',
-        aiRecommendations: process.env.ENABLE_AI_RECOMMENDATIONS === 'true',
-        gamification: process.env.ENABLE_GAMIFICATION === 'true',
-        ltiIntegration: process.env.ENABLE_LTI_INTEGRATION === 'true',
-        emailNotifications: !!process.env.SENDGRID_API_KEY
-      },
-      connectedUsers: io.engine.clientsCount
-    };
-
-    // Check if any critical services are down
-    if (dbStatus === 'disconnected') {
-      healthData.status = 'unhealthy';
-      return res.status(503).json(healthData);
-    }
-
-    res.json(healthData);
-    
+    res.status(statusCode).json(health);
   } catch (error) {
     logger.error('Health check error:', error);
     res.status(503).json({
       status: 'unhealthy',
       timestamp: new Date().toISOString(),
       error: error.message
+    });
+  }
+});
+
+// Detailed health check (admin only)
+app.get('/admin/system/health', async (req, res) => {
+  try {
+    const detailedHealth = await healthChecker.getDetailedHealth();
+    res.json(detailedHealth);
+  } catch (error) {
+    logger.error('Detailed health check error:', error);
+    res.status(500).json({
+      error: 'Failed to get detailed health information',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Performance metrics endpoint (admin only)
+app.get('/admin/system/metrics', async (req, res) => {
+  try {
+    const metrics = await getPerformanceMetrics();
+    res.json(metrics);
+  } catch (error) {
+    logger.error('Performance metrics error:', error);
+    res.status(500).json({
+      error: 'Failed to get performance metrics',
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -476,6 +460,9 @@ app.use('/uploads', express.static('public/uploads', {
 
 // 404 handler
 app.use('*', notFoundHandler);
+
+// Error tracking middleware
+app.use(errorTracking);
 
 // Global error handler
 app.use(errorHandler);
