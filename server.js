@@ -37,7 +37,23 @@ const server = http.createServer(app);
 
 const io = socketIo(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: function (origin, callback) {
+      const defaultOrigins = [
+        'http://localhost:3000',
+        'http://localhost:19006',
+        'https://medical-case-simulator.netlify.app',
+        'https://preview-medical-case-simulator-kzmqunml3u6b91zmyx69.vusercontent.net'
+      ];
+      
+      const envOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+      const allowedOrigins = [...defaultOrigins, ...envOrigins];
+      
+      if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ["GET", "POST"],
     credentials: true
   },
@@ -332,6 +348,16 @@ app.use(compression({
 
 // CORS
 app.use(corsMiddleware);
+
+// Handle preflight requests explicitly
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin,X-Requested-With,Content-Type,Accept,Authorization,Cache-Control,Pragma,X-Request-ID');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Max-Age', '86400');
+  res.sendStatus(204);
+});
 
 // Body parsing
 app.use(express.json({ 
