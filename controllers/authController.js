@@ -7,6 +7,20 @@ const { JWT_REFRESH_SECRET } = require('../config/auth');
 
 const register = async (req, res) => {
   try {
+    // Log the incoming request for debugging
+    logger.info('Registration attempt:', { 
+      body: req.body, 
+      validatedData: req.validatedData 
+    });
+    
+    if (!req.validatedData) {
+      logger.error('No validated data found in request');
+      return res.status(400).json({ 
+        error: 'Validation failed - no validated data', 
+        code: 'NO_VALIDATED_DATA' 
+      });
+    }
+    
     const { email, password, profile } = req.validatedData;
 
     // Check if user already exists

@@ -93,11 +93,23 @@ const validate = (schemaName) => {
 
     const { error, value } = schema.validate(req.body);
     if (error) {
-      const details = error.details.map(detail => detail.message);
+      const details = error.details.map(detail => ({
+        field: detail.path.join('.'),
+        message: detail.message,
+        value: detail.context?.value
+      }));
+      
+      logger.error('Validation failed:', {
+        schemaName,
+        requestBody: req.body,
+        validationErrors: details
+      });
+      
       return res.status(400).json({
         error: 'Validation failed',
         code: 'VALIDATION_ERROR',
-        details
+        details: details.map(d => d.message),
+        fields: details
       });
     }
 
