@@ -257,7 +257,35 @@ const aiService = {
     } catch (error) {
       logger.error('Update user analytics error:', error);
     }
+  },
+  // Add missing generateCompetencyAssessment method
+async generateCompetencyAssessment(userId) {
+  try {
+    const userProgress = await Progress.find({ userId, status: 'completed' })
+      .populate('caseId', 'specialty difficulty')
+      .lean();
+
+    const competencies = {
+      clinicalReasoning: this.assessClinicalReasoning(userProgress),
+      medicalKnowledge: this.assessMedicalKnowledge(userProgress),
+      patientCare: this.assessPatientCare(userProgress),
+      communication: this.assessCommunication(userProgress),
+      professionalism: this.assessProfessionalism(userProgress),
+      systemsBasedPractice: this.assessSystemsBasedPractice(userProgress)
+    };
+
+    return {
+      userId,
+      competencies,
+      overallScore: this.calculateOverallCompetencyScore(competencies),
+      recommendations: this.generateCompetencyRecommendations(competencies),
+      assessmentDate: new Date()
+    };
+  } catch (error) {
+    logger.error('Competency assessment error:', error);
+    throw error;
   }
+}
 };
 
 module.exports = aiService;

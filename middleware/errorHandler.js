@@ -34,4 +34,12 @@ const notFound = (req, res, next) => {
   });
 };
 
-module.exports = { errorHandler, notFound };
+const notFoundHandler = (req, res, next) => {
+  res.status(404).json({
+    error: 'Route not found',
+    code: 'NOT_FOUND',
+    path: req.originalUrl
+  });
+};
+
+module.exports = { errorHandler, notFound: notFoundHandler };
