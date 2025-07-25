@@ -1,139 +1,32 @@
-# í¿¥ Medical Case Simulator Backend
+# ğŸ¥ Medical Case Simulator Backend
 
 A world-class medical case simulator backend designed for clinical education and skill development.
 
-## âœ¨ Features
+## Features
 
-- í·  **AI-Powered Recommendations** - Personalized case suggestions based on performance
-- í³Š **Advanced Learning Analytics** - Comprehensive progress tracking and competency assessment
-- í¾® **Gamification System** - Achievements, streaks, and engagement mechanics
-- í´ **Real-time Collaboration** - Live discussions and instructor feedback
-- í³± **Interactive Simulations** - Progressive case disclosure with realistic scenarios
-- í´’ **Enterprise Security** - JWT authentication, role-based access, and data encryption
-- í¼ **Multi-institutional Support** - Scalable architecture for healthcare organizations
-- í³ˆ **Performance Monitoring** - Real-time analytics and health monitoring
+- ğŸ§  AI-powered case recommendations
+- ğŸ“Š Advanced learning analytics
+- ğŸ® Gamification system
+- ğŸ¤ Real-time collaboration
+- ğŸ“± Interactive case simulations
+- ğŸ”’ Enterprise-grade security
 
-## íº€ Quick Start
+## Quick Start
 
-### Prerequisites
-- Node.js 16+ and npm 8+
-- MongoDB (local or Atlas)
-- SendGrid account (for emails)
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Copy `.env.example` to `.env` and configure
+4. Start development server: `npm run dev`
+5. Visit API docs: `http://localhost:5000/api-docs`
 
-### Installation
+## Deployment
 
-1. **Clone and setup**
-   ```bash
-   git clone https://github.com/yourusername/medical-case-simulator-backend.git
-   cd medical-case-simulator-backend
-   npm install
-   ```
+See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed deployment instructions.
 
-2. **Environment Configuration**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
+## Contributing
 
-3. **Start Development Server**
-   ```bash
-   npm run dev
-   ```
+See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for contribution guidelines.
 
-4. **Visit API Documentation**
-   ```
-   http://localhost:5000/api-docs
-   ```
+## License
 
-## í³ Project Structure
-
-```
-â”œâ”€â”€ server.js              # Main application entry
-â”œâ”€â”€ config/                # Configuration files
-â”œâ”€â”€ models/                # Database models
-â”œâ”€â”€ routes/                # API routes
-â”œâ”€â”€ controllers/           # Business logic
-â”œâ”€â”€ services/              # Business services
-â”œâ”€â”€ middleware/            # Custom middleware
-â”œâ”€â”€ utils/                 # Utility functions
-â”œâ”€â”€ scripts/               # Database scripts
-â”œâ”€â”€ tests/                 # Test files
-â””â”€â”€ docs/                  # Documentation
-```
-
-## í» ï¸ Development
-
-```bash
-# Start development server
-npm run dev
-
-# Run tests
-npm test
-
-# Run tests with coverage
-npm run test:coverage
-
-# Lint code
-npm run lint
-
-# Seed database
-npm run seed
-```
-
-## íº€ Deployment
-
-### Render.com (Recommended)
-1. Push code to GitHub
-2. Connect repository to Render
-3. Set environment variables
-4. Deploy with `render.yaml` configuration
-
-### Docker
-```bash
-docker build -t medical-case-simulator .
-docker run -p 5000:5000 medical-case-simulator
-```
-
-See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed instructions.
-
-## í³š API Documentation
-
-- **Health Check**: `GET /health`
-- **API Docs**: `GET /api-docs`
-- **Authentication**: `POST /api/auth/login`
-- **Cases**: `GET /api/cases`
-- **Simulation**: `POST /api/simulation/start/:caseId`
-
-Full API documentation available at `/api-docs` when running.
-
-## í´ Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed guidelines.
-
-## í³„ License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## í¶˜ Support
-
-- í³– [Documentation](docs/)
-- í°› [Issue Tracker](https://github.com/yourusername/medical-case-simulator-backend/issues)
-- í²¬ [Discussions](https://github.com/yourusername/medical-case-simulator-backend/discussions)
-
-## í¾¯ Roadmap
-
-- [ ] Advanced AI recommendations
-- [ ] Multi-language support
-- [ ] Mobile app integration
-- [ ] VR/AR case simulations
-- [ ] Advanced reporting dashboard
-
----
-
-Built with â¤ï¸ for medical education
+MIT License - see LICENSE file for details.

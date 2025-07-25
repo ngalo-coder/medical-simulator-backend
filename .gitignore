@@ -1,15 +1,12 @@
 # Dependencies
 node_modules/
 npm-debug.log*
-yarn-debug.log*
 yarn-error.log*
 
 # Environment variables
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
 
 # Logs
 logs/
@@ -21,7 +18,7 @@ pids
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
+# Coverage directory
 coverage/
 .nyc_output
 
@@ -33,9 +30,8 @@ build/
 uploads/
 temp/
 public/uploads/*
-!public/uploads/.gitkeep
 
-# Editor directories and files
+# Editor directories
 .vscode/
 .idea/
 *.swp
@@ -45,23 +41,11 @@ public/uploads/*
 .DS_Store
 .DS_Store?
 ._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
 
-# Database files
+# Database
 *.sqlite
 *.db
 
 # Backup files
 backup/
-
-# Test files
-test-results/
-*.tgz
-*.tar.gz
-
-# Cache
-.cache/
-.parcel-cache/

@@ -1,24 +1,35 @@
 #!/bin/bash
 set -e
 
-echo "ÌøóÔ∏è  Building Medical Case Simulator Backend..."
+echo "üèóÔ∏è  Building Medical Case Simulator Backend..."
 
 # Install dependencies
-echo "Ì≥¶ Installing production dependencies..."
+echo "üì¶ Installing production dependencies..."
 npm ci --only=production
 
-# Create necessary directories
-echo "Ì≥Å Creating application directories..."
-mkdir -p logs uploads temp
+# Create required directories
+echo "üìÅ Creating application directories..."
+mkdir -p logs
+mkdir -p uploads
+mkdir -p temp
 
-# Set permissions
-echo "Ì¥ê Setting permissions..."
-chmod +x start.sh
+# Set appropriate permissions
+echo "üîê Setting file permissions..."
+find . -name "*.sh" -exec chmod +x {} \;
 
-# Verify critical files
+# Run any additional build steps
+echo "üî® Running build optimizations..."
+npm run build 2>/dev/null || echo "‚ÑπÔ∏è  No build script found, continuing..."
+
+# Verify critical files exist
 echo "‚úÖ Verifying build artifacts..."
 if [ ! -f "server.js" ]; then
     echo "‚ùå server.js not found!"
+    exit 1
+fi
+
+if [ ! -f "package.json" ]; then
+    echo "‚ùå package.json not found!"
     exit 1
 fi
 

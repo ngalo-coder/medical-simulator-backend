@@ -1,25 +1,47 @@
 #!/bin/bash
 set -e
 
-echo "Ì∫Ä Starting Medical Case Simulator Backend..."
+echo "üöÄ Starting Medical Case Simulator Backend..."
 
 # Environment validation
-if [ -z "$MONGODB_URI" ]; then
-    echo "‚ùå MONGODB_URI environment variable is not set"
-    exit 1
+echo "üîç Validating environment..."
+
+if [ -z "$NODE_ENV" ]; then
+    echo "‚ö†Ô∏è  NODE_ENV not set, defaulting to production"
+    export NODE_ENV=production
 fi
 
-if [ -z "$JWT_SECRET" ]; then
-    echo "‚ùå JWT_SECRET environment variable is not set"
-    exit 1
+if [ -z "$PORT" ]; then
+    echo "‚ö†Ô∏è  PORT not set, defaulting to 10000"
+    export PORT=10000
 fi
 
-# Seed database if needed
+# Critical environment variables check
+REQUIRED_VARS=("MONGODB_URI" "JWT_SECRET")
+for var in "${REQUIRED_VARS[@]}"; do
+    if [ -z "${!var}" ]; then
+        echo "‚ùå Required environment variable $var is not set"
+        exit 1
+    fi
+done
+
+echo "‚úÖ Environment validation passed"
+
+# Database seeding (only on first deployment or when explicitly requested)
 if [ "$SEED_DATABASE" = "true" ]; then
-    echo "Ìº± Seeding database..."
+    echo "üå± Seeding database with sample data..."
     npm run seed || echo "‚ö†Ô∏è  Database seeding failed, continuing..."
 fi
 
+# Health check before starting
+echo "üîç Pre-flight health check..."
+node -e "
+    console.log('Node.js version:', process.version);
+    console.log('Memory usage:', process.memoryUsage());
+    console.log('Environment:', process.env.NODE_ENV);
+    console.log('Port:', process.env.PORT);
+" || exit 1
+
 # Start the application
-echo "ÌæØ Starting server on port ${PORT:-10000}..."
-exec npm start
+echo "üéØ Starting Medical Case Simulator on port $PORT..."
+exec node server.js
