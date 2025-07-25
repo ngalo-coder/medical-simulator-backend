@@ -453,6 +453,45 @@ const adminController = {
     }
   },
 
+  async getSystemStats(req, res) {
+    try {
+      const [
+        totalUsers,
+        totalCases,
+        totalProgress,
+        activeUsers,
+        recentActivity
+      ] = await Promise.all([
+        User.countDocuments(),
+        Case.countDocuments(),
+        Progress.countDocuments(),
+        User.countDocuments({ lastLogin: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } }),
+        Progress.countDocuments({ createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } })
+      ]);
+
+      const systemMetrics = await analyticsService.generateSystemMetrics();
+
+      res.json({
+        overview: {
+          totalUsers,
+          totalCases,
+          totalProgress,
+          activeUsers,
+          recentActivity
+        },
+        performance: systemMetrics,
+        timestamp: new Date()
+      });
+
+    } catch (error) {
+      logger.error('Get system stats error:', error);
+      res.status(500).json({
+        error: 'Failed to retrieve system statistics',
+        code: 'SYSTEM_STATS_ERROR'
+      });
+    }
+  },
+
   async createBackup(req, res) {
     try {
       const mongoose = require('mongoose');

@@ -35,7 +35,6 @@
     "docker:run": "docker-compose up -d",
     "docker:stop": "docker-compose down",
     "docker:logs": "docker-compose logs -f api",
-    "security:audit": "npm audit --audit-level moderate",
     "security:fix": "npm audit fix",
     "precommit": "npm run lint && npm run test:unit",
     "prepare": "husky install || true"
@@ -61,7 +60,7 @@
     "csv-parser": "^3.2.0",
     "dotenv": "^17.2.0",
     "eslint-plugin-promise": "^6.0.0",
-    "express": "^5.1.0",
+    "express": "^4.21.2",
     "express-rate-limit": "^8.0.1",
     "express-validator": "^7.2.1",
     "helmet": "^8.1.0",
@@ -74,6 +73,7 @@
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
     "nodemailer": "^7.0.5",
+    "path-to-regexp": "^6.3.0",
     "rate-limit-redis": "^4.2.1",
     "redis": "^5.6.1",
     "socket.io": "^4.8.1",
@@ -95,8 +95,8 @@
     "lint-staged": "^16.1.2",
     "mongodb-memory-server": "^10.1.4",
     "nodemon": "^3.1.10",
+    "nyc": "^15.1.0",
     "prettier": "^3.6.2",
-    "supertest": "^7.1.4",
-    "nyc": "^15.1.0"
+    "supertest": "^7.1.4"
   }
 }

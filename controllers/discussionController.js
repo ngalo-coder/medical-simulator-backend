@@ -4,6 +4,152 @@ const notificationService = require('../services/notificationService');
 const logger = require('../utils/logger');
 
 const discussionController = {
+  async getDiscussions(req, res) {
+    try {
+      const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc', caseId } = req.query;
+
+      const skip = (page - 1) * limit;
+      const sortObj = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
+
+      // Build filter
+      const filter = { parentId: null };
+      if (caseId) filter.caseId = caseId;
+
+      const [discussions, totalCount] = await Promise.all([
+        Discussion.find(filter)
+          .populate('userId', 'profile.firstName profile.lastName role')
+          .populate('caseId', 'title specialty')
+          .sort(sortObj)
+          .skip(skip)
+          .limit(parseInt(limit))
+          .lean(),
+        Discussion.countDocuments(filter)
+      ]);
+
+      // Get replies for each discussion
+      for (let discussion of discussions) {
+        const replies = await Discussion.find({ parentId: discussion._id })
+          .populate('userId', 'profile.firstName profile.lastName role')
+          .sort({ createdAt: 1 })
+          .lean();
+        discussion.replies = replies;
+        discussion.replyCount = replies.length;
+        discussion.voteScore = discussion.votes.upvotes.length - discussion.votes.downvotes.length;
+      }
+
+      res.json({
+        discussions,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalCount / limit),
+          totalCount,
+          hasNext: skip + discussions.length < totalCount,
+          hasPrev: page > 1
+        }
+      });
+
+    } catch (error) {
+      logger.error('Get discussions error:', error);
+      res.status(500).json({
+        error: 'Failed to retrieve discussions',
+        code: 'DISCUSSIONS_FETCH_ERROR'
+      });
+    }
+  },
+
+  async getDiscussionById(req, res) {
+    try {
+      const { id } = req.params;
+
+      const discussion = await Discussion.findById(id)
+        .populate('userId', 'profile.firstName profile.lastName role')
+        .populate('caseId', 'title specialty')
+        .lean();
+
+      if (!discussion) {
+        return res.status(404).json({
+          error: 'Discussion not found',
+          code: 'DISCUSSION_NOT_FOUND'
+        });
+      }
+
+      // Get replies
+      const replies = await Discussion.find({ parentId: id })
+        .populate('userId', 'profile.firstName profile.lastName role')
+        .sort({ createdAt: 1 })
+        .lean();
+
+      discussion.replies = replies;
+      discussion.replyCount = replies.length;
+      discussion.voteScore = discussion.votes.upvotes.length - discussion.votes.downvotes.length;
+
+      res.json({ discussion });
+
+    } catch (error) {
+      logger.error('Get discussion by ID error:', error);
+      res.status(500).json({
+        error: 'Failed to retrieve discussion',
+        code: 'DISCUSSION_FETCH_ERROR'
+      });
+    }
+  },
+
+  async replyToDiscussion(req, res) {
+    try {
+      const { id } = req.params;
+      const { content } = req.body;
+
+      // Verify parent discussion exists
+      const parentDiscussion = await Discussion.findById(id);
+      if (!parentDiscussion) {
+        return res.status(404).json({
+          error: 'Parent discussion not found',
+          code: 'DISCUSSION_NOT_FOUND'
+        });
+      }
+
+      const reply = new Discussion({
+        caseId: parentDiscussion.caseId,
+        userId: req.user._id,
+        content,
+        type: 'reply',
+        parentId: id,
+        isInstructorResponse: ['instructor', 'admin'].includes(req.user.role)
+      });
+
+      await reply.save();
+      await reply.populate('userId', 'profile.firstName profile.lastName role');
+
+      // Send real-time notification
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`discussion_${parentDiscussion.caseId}`).emit('reply_added', {
+          reply,
+          parentId: id,
+          user: {
+            id: req.user._id,
+            name: `${req.user.profile.firstName} ${req.user.profile.lastName}`,
+            role: req.user.role
+          }
+        });
+      }
+
+      logger.info(`Reply created: ${reply._id} by user: ${req.user._id}`);
+
+      res.status(201).json({
+        message: 'Reply posted successfully',
+        reply
+      });
+
+    } catch (error) {
+      logger.error('Reply to discussion error:', error);
+      res.status(500).json({
+        error: 'Failed to create reply',
+        code: 'REPLY_CREATE_ERROR'
+      });
+    }
+  },
+
   async getCaseDiscussions(req, res) {
     try {
       const { caseId } = req.params;
@@ -55,8 +201,7 @@ const discussionController = {
 
   async createDiscussion(req, res) {
     try {
-      const { caseId } = req.params;
-      const { content, type = 'comment', parentId } = req.body;
+      const { caseId, content, type = 'comment', parentId } = req.body;
 
       // Verify case exists
       const case_obj = await Case.findById(caseId);
@@ -110,10 +255,10 @@ const discussionController = {
 
   async voteOnDiscussion(req, res) {
     try {
-      const { discussionId } = req.params;
+      const { id } = req.params;
       const { voteType } = req.body; // 'upvote' or 'downvote'
 
-      const discussion = await Discussion.findById(discussionId);
+      const discussion = await Discussion.findById(id);
       if (!discussion) {
         return res.status(404).json({
           error: 'Discussion not found',
@@ -156,10 +301,10 @@ const discussionController = {
 
   async updateDiscussion(req, res) {
     try {
-      const { discussionId } = req.params;
+      const { id } = req.params;
       const { content } = req.body;
 
-      const discussion = await Discussion.findById(discussionId);
+      const discussion = await Discussion.findById(id);
       if (!discussion) {
         return res.status(404).json({
           error: 'Discussion not found',
@@ -202,9 +347,9 @@ const discussionController = {
 
   async deleteDiscussion(req, res) {
     try {
-      const { discussionId } = req.params;
+      const { id } = req.params;
 
-      const discussion = await Discussion.findById(discussionId);
+      const discussion = await Discussion.findById(id);
       if (!discussion) {
         return res.status(404).json({
           error: 'Discussion not found',
@@ -224,12 +369,12 @@ const discussionController = {
       }
 
       // Delete all replies first
-      await Discussion.deleteMany({ parentId: discussionId });
+      await Discussion.deleteMany({ parentId: id });
       
       // Delete the discussion
-      await Discussion.findByIdAndDelete(discussionId);
+      await Discussion.findByIdAndDelete(id);
 
-      logger.info(`Discussion deleted: ${discussionId} by user: ${req.user._id}`);
+      logger.info(`Discussion deleted: ${id} by user: ${req.user._id}`);
 
       res.json({
         message: 'Discussion deleted successfully'

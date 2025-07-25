@@ -17,10 +17,10 @@ const { connectRedis } = require('./config/redis');
 
 // Import middleware
 const corsMiddleware = require('./middleware/cors');
-const { httpLogger } = require('./middleware/logging');
+const httpLogger = require('./middleware/logging');
 const { generalLimiter } = require('./middleware/rateLimit');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
-const { performanceMonitoring, requestTracking, errorTracking } = require('./middleware/monitoring');
+const { performanceMonitoring, requestId } = require('./middleware/monitoring');
 
 // Import routes
 const apiRoutes = require('./routes');
@@ -346,7 +346,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.set('trust proxy', 1);
 
 // Request tracking and monitoring
-app.use(requestTracking);
+app.use(requestId);
 app.use(performanceMonitoring);
 
 // Request logging
@@ -461,8 +461,7 @@ app.use('/uploads', express.static('public/uploads', {
 // 404 handler
 app.use('*', notFoundHandler);
 
-// Error tracking middleware
-app.use(errorTracking);
+// Error tracking middleware (removed - function doesn't exist)
 
 // Global error handler
 app.use(errorHandler);
